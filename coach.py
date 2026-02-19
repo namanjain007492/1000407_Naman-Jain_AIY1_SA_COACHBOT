@@ -20,13 +20,30 @@ except KeyError:
     st.error("⚠️ API Key missing! Please configure '.streamlit/secrets.toml' or Streamlit Cloud Secrets.")
     st.stop()
 
-# --- HELPER FUNCTION: GEMINI API CALL ---
+# --- BULLETPROOF HELPER FUNCTION: DYNAMIC MODEL DISCOVERY ---
 def get_ai_coach(prompt, temperature=0.7):
     try:
-        # Initializing the correct model for the updated SDK
-        model = genai.GenerativeModel('gemini-pro')
+        # 1. Ask Google which models your API key is actually allowed to use
+        available_models = []
+        for m in genai.list_models():
+            if 'generateContent' in m.supported_generation_methods:
+                available_models.append(m.name)
         
-        # Generating response with specific temperature controls
+        # 2. Check if the key is completely restricted
+        if not available_models:
+            return "🚨 API Key Error: Your key is active, but Google says it has ZERO access to text models. Please generate a new key at aistudio.google.com."
+
+        # 3. Pick the best available model (Prefers 1.5 Flash, then Pro, then defaults to whatever works)
+        target_model = available_models[0] 
+        for model_name in available_models:
+            if '1.5-flash' in model_name:
+                target_model = model_name
+                break
+            elif 'gemini-pro' in model_name and '1.5' not in target_model:
+                target_model = model_name
+                
+        # 4. Generate the content using the verified working model
+        model = genai.GenerativeModel(target_model)
         response = model.generate_content(
             prompt,
             generation_config=genai.types.GenerationConfig(
@@ -35,8 +52,9 @@ def get_ai_coach(prompt, temperature=0.7):
             )
         )
         return response.text
+        
     except Exception as e:
-        return f"🚨 Generation Error: {str(e)}"
+        return f"🚨 Connection Error: {str(e)}\n\n(Tip: If this still fails, your API key project might have billing/access restrictions. Generate a new one in a fresh project at Google AI Studio)."
 
 # --- CUSTOM UI STYLING ---
 st.markdown("""
@@ -80,7 +98,7 @@ with tab1:
         if not position:
             st.warning("Please enter your position in the sidebar to get a personalized plan!")
         else:
-            with st.spinner("CoachBot is designing your routine..."):
+            with st.spinner("CoachBot is checking model availability and designing your routine..."):
                 prompt = f"""
                 Create a {intensity} intensity, full-body workout plan and a personalized warm-up/cooldown 
                 for a {age}-year-old {position} in {sport}. Goal: {goal}. 
