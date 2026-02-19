@@ -24,7 +24,7 @@ except KeyError:
 def get_ai_coach(prompt, temperature=0.7):
     try:
         # Initializing the correct model for the updated SDK
-        model = genai.GenerativeModel('gemini-1.5-flash')
+        model = genai.GenerativeModel('gemini-pro')
         
         # Generating response with specific temperature controls
         response = model.generate_content(
