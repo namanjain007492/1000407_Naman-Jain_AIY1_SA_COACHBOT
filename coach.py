@@ -13,37 +13,17 @@ st.set_page_config(
 
 # --- SECURE API KEY SETUP ---
 try:
-    # Fetches the key securely from .streamlit/secrets.toml locally or Streamlit Cloud Secrets
     API_KEY = st.secrets["GEMINI_API_KEY"]
     genai.configure(api_key=API_KEY)
 except KeyError:
     st.error("⚠️ API Key missing! Please configure '.streamlit/secrets.toml' or Streamlit Cloud Secrets.")
     st.stop()
 
-# --- BULLETPROOF HELPER FUNCTION: DYNAMIC MODEL DISCOVERY ---
+# --- HELPER FUNCTION: GEMINI API CALL (FREE TIER OPTIMIZED) ---
 def get_ai_coach(prompt, temperature=0.7):
     try:
-        # 1. Ask Google which models your API key is actually allowed to use
-        available_models = []
-        for m in genai.list_models():
-            if 'generateContent' in m.supported_generation_methods:
-                available_models.append(m.name)
-        
-        # 2. Check if the key is completely restricted
-        if not available_models:
-            return "🚨 API Key Error: Your key is active, but Google says it has ZERO access to text models. Please generate a new key at aistudio.google.com."
-
-        # 3. Pick the best available model (Prefers 1.5 Flash, then Pro, then defaults to whatever works)
-        target_model = available_models[0] 
-        for model_name in available_models:
-            if '1.5-flash' in model_name:
-                target_model = model_name
-                break
-            elif 'gemini-pro' in model_name and '1.5' not in target_model:
-                target_model = model_name
-                
-        # 4. Generate the content using the verified working model
-        model = genai.GenerativeModel(target_model)
+        # Using the official free-tier supported model
+        model = genai.GenerativeModel('gemini-2.5-flash')
         response = model.generate_content(
             prompt,
             generation_config=genai.types.GenerationConfig(
@@ -52,9 +32,11 @@ def get_ai_coach(prompt, temperature=0.7):
             )
         )
         return response.text
-        
     except Exception as e:
-        return f"🚨 Connection Error: {str(e)}\n\n(Tip: If this still fails, your API key project might have billing/access restrictions. Generate a new one in a fresh project at Google AI Studio)."
+        error_msg = str(e)
+        if "429" in error_msg and "limit: 0" in error_msg:
+            return "🚨 **QUOTA ERROR:** Google has blocked your free tier (Limit 0). To fix this, you MUST go to Google Cloud Console, select your API project, and enable a Billing Account to unlock your 1,500 free daily requests."
+        return f"🚨 Generation Error: {error_msg}"
 
 # --- CUSTOM UI STYLING ---
 st.markdown("""
@@ -86,92 +68,47 @@ allergies = st.sidebar.text_input("Food Allergies", "None")
 # --- MAIN DASHBOARD INTERFACE ---
 st.subheader("🧠 Coaching Dashboard")
 
-# Feature Tabs
 tab1, tab2, tab3, tab4 = st.tabs(["🏋️‍♂️ Workout Plan", "🩹 Recovery & Safety", "🎯 Tactics & Mindset", "🍎 Nutrition Plan"])
 
-# 1. WORKOUT PLAN (Medium Temperature)
 with tab1:
     st.markdown("### Personalized Warm-up & Workout Routine")
     intensity = st.select_slider("Select Training Intensity", options=["Light", "Moderate", "Vigorous"])
-    
     if st.button("Generate Workout Plan"):
         if not position:
             st.warning("Please enter your position in the sidebar to get a personalized plan!")
         else:
-            with st.spinner("CoachBot is checking model availability and designing your routine..."):
-                prompt = f"""
-                Create a {intensity} intensity, full-body workout plan and a personalized warm-up/cooldown 
-                for a {age}-year-old {position} in {sport}. Goal: {goal}. 
-                Ensure the exercises are age-appropriate.
-                """
-                # Temperature 0.5 for balanced, structured workout generation
-                workout_plan = get_ai_coach(prompt, temperature=0.5)
-                st.write(workout_plan)
+            with st.spinner("CoachBot is designing your routine..."):
+                prompt = f"Create a {intensity} intensity, full-body workout plan and warm-up for a {age}-year-old {position} in {sport}. Goal: {goal}."
+                st.write(get_ai_coach(prompt, temperature=0.5))
 
-# 2. RECOVERY & SAFETY (Low Temperature)
 with tab2:
     st.markdown("### Injury Adaptation & Safe Training")
     if st.button("Generate Recovery Protocol"):
         if not injury_hist:
-            st.info("No injuries reported. Keep up the good work! Add an injury in the sidebar to test this feature.")
+            st.info("No injuries reported. Keep up the good work!")
         else:
             with st.spinner("Analyzing injury profile..."):
-                prompt = f"""
-                Act as a sports physiotherapist. Create a safe recovery training schedule and modifications 
-                for a {sport} athlete dealing with: {injury_hist}. 
-                Include what movements they MUST avoid to prevent further damage.
-                """
-                # Temperature 0.3 for highly accurate, conservative medical/safety advice
-                recovery_plan = get_ai_coach(prompt, temperature=0.3)
+                prompt = f"Act as a sports physiotherapist. Create a safe recovery schedule for a {sport} athlete dealing with: {injury_hist}. Include movements they MUST avoid."
                 st.warning("⚠️ Always consult a medical professional before starting post-injury training.")
-                st.write(recovery_plan)
+                st.write(get_ai_coach(prompt, temperature=0.3))
 
-# 3. TACTICS & MINDSET (High Temperature)
 with tab3:
     st.markdown("### Tactical Advice & Mental Focus")
-    skill = st.text_input("Specific skill you want to improve", placeholder="e.g., decision-making under pressure, bowling yorkers")
-    
+    skill = st.text_input("Specific skill you want to improve", placeholder="e.g., decision-making under pressure")
     if st.button("Get Tactical Tips"):
         with st.spinner("Drawing up the playbook..."):
-            prompt = f"""
-            Act as an elite {sport} coach. Provide creative, highly specific tactical coaching tips 
-            to improve '{skill}' for a {position}. Include a pre-match visualization technique.
-            """
-            # Temperature 0.8 for creative tactical solutions and varied mental routines
-            tactics = get_ai_coach(prompt, temperature=0.8)
-            st.info(tactics)
+            prompt = f"Act as an elite {sport} coach. Provide specific tactical coaching tips to improve '{skill}' for a {position}. Include a pre-match visualization technique."
+            st.info(get_ai_coach(prompt, temperature=0.8))
 
-# 4. NUTRITION PLAN (Data Visualization Integration)
 with tab4:
     st.markdown("### Nutrition & Macro Guide")
     if st.button("Generate Meal Plan"):
         with st.spinner("Calculating macros..."):
-            prompt = f"""
-            Suggest a 1-day nutrition guide for a {age}-year-old {sport} athlete following a {diet} diet. 
-            Allergies: {allergies}. Goal: {goal}. Keep it simple and structured.
-            """
-            # Temperature 0.6 for balanced meal suggestions
-            nutrition = get_ai_coach(prompt, temperature=0.6)
-            st.write(nutrition)
+            prompt = f"Suggest a 1-day nutrition guide for a {age}-year-old {sport} athlete on a {diet} diet. Allergies: {allergies}. Goal: {goal}."
+            st.write(get_ai_coach(prompt, temperature=0.6))
             
-            # Interactive Visualization using Plotly & Pandas
             st.markdown("#### Suggested Daily Macronutrient Breakdown")
-            
-            # Simple logic to adjust macros based on user goal
-            if goal == "Build Stamina":
-                macros = {"Macronutrient": ["Carbohydrates", "Protein", "Fats"], "Percentage": [55, 25, 20]}
-            elif goal == "Strength":
-                macros = {"Macronutrient": ["Carbohydrates", "Protein", "Fats"], "Percentage": [40, 40, 20]}
-            elif goal == "Post-Injury Recovery":
-                macros = {"Macronutrient": ["Carbohydrates", "Protein", "Fats"], "Percentage": [45, 35, 20]}
-            else:
-                macros = {"Macronutrient": ["Carbohydrates", "Protein", "Fats"], "Percentage": [45, 30, 25]}
-                
+            macros = {"Macronutrient": ["Carbohydrates", "Protein", "Fats"], "Percentage": [55, 25, 20]} if goal == "Build Stamina" else {"Macronutrient": ["Carbohydrates", "Protein", "Fats"], "Percentage": [40, 40, 20]} if goal == "Strength" else {"Macronutrient": ["Carbohydrates", "Protein", "Fats"], "Percentage": [45, 30, 25]}
             df = pd.DataFrame(macros)
-            
-            # Create interactive pie chart
-            fig = px.pie(df, values='Percentage', names='Macronutrient', 
-                         color='Macronutrient', 
-                         color_discrete_map={'Carbohydrates':'#FF9999', 'Protein':'#66B2FF', 'Fats':'#99FF99'},
-                         title=f"Target Macros for {goal}")
+            fig = px.pie(df, values='Percentage', names='Macronutrient', color='Macronutrient', color_discrete_map={'Carbohydrates':'#FF9999', 'Protein':'#66B2FF', 'Fats':'#99FF99'})
             st.plotly_chart(fig, use_container_width=True)
