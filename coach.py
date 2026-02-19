@@ -1,3 +1,4 @@
+# app.py
 import streamlit as st
 import pandas as pd
 import plotly.express as px
@@ -5,7 +6,7 @@ import google.generativeai as genai
 import json
 
 st.set_page_config(
-    page_title="CoachBot AI | Data Dashboard",
+    page_title="CoachBot AI",
     page_icon="🤖",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -14,7 +15,7 @@ st.set_page_config(
 try:
     genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
 except KeyError:
-    st.error("⚠️ API Key missing! Configure '.streamlit/secrets.toml'.")
+    st.error("API Key missing. Configure '.streamlit/secrets.toml'.")
     st.stop()
 
 def get_ai_text(prompt, temperature=0.7):
@@ -25,7 +26,7 @@ def get_ai_text(prompt, temperature=0.7):
             generation_config=genai.types.GenerationConfig(temperature=temperature)
         ).text
     except Exception as e:
-        return f"🚨 Generation Error: {str(e)}"
+        return f"Generation Error: {str(e)}"
 
 def get_ai_data(prompt):
     try:
@@ -38,7 +39,7 @@ def get_ai_data(prompt):
             )
         )
         return json.loads(response.text)
-    except Exception:
+    except Exception as e:
         return None
 
 st.markdown("""
@@ -49,12 +50,13 @@ st.markdown("""
     """, unsafe_allow_html=True)
 
 st.title("🏃 CoachBot AI")
+st.markdown("Virtual assistant providing personalized sports training and tactical coaching.")
 st.divider()
 
 st.sidebar.header("👤 Athlete Profile")
 sport = st.sidebar.selectbox("Sport", ["Football", "Cricket", "Basketball", "Athletics", "Tennis"])
 position = st.sidebar.text_input("Position", placeholder="e.g., Striker, Fast Bowler")
-age = st.sidebar.number_input("Age", 8, 30, 15)
+age = st.sidebar.number_input("Age", min_value=8, max_value=30, value=15)
 
 st.sidebar.header("🩺 Health & Goals")
 goal = st.sidebar.selectbox("Goal", ["Build Stamina", "Post-Injury Recovery", "Tactical Improvement", "Strength"])
@@ -91,13 +93,12 @@ with tab2:
         else:
             with st.spinner("Analyzing injury..."):
                 prompt = f"Act as a physiotherapist. Create a safe recovery schedule for a {sport} athlete with: {injury_hist}. Include movements to avoid."
-                st.warning("⚠️ Consult a medical professional before training.")
                 st.write(get_ai_text(prompt, temperature=0.3))
 
 with tab3:
     skill = st.text_input("Skill to improve", placeholder="e.g., decision-making")
     if st.button("Get Tactical Tips"):
-        with st.spinner("Drawing plays..."):
+        with st.spinner("Generating plays..."):
             prompt = f"Act as an elite {sport} coach. Provide specific tactical tips to improve '{skill}' for a {position}. Include a visualization technique."
             st.info(get_ai_text(prompt, temperature=0.8))
 
@@ -114,7 +115,7 @@ with tab4:
                 st.dataframe(pd.DataFrame(data), use_container_width=True, hide_index=True)
                 
                 macros = {"Macronutrient": ["Carbs", "Protein", "Fats"], "Percentage": [55, 25, 20]} if goal == "Build Stamina" else {"Macronutrient": ["Carbs", "Protein", "Fats"], "Percentage": [40, 40, 20]} if goal == "Strength" else {"Macronutrient": ["Carbs", "Protein", "Fats"], "Percentage": [45, 30, 25]}
-                fig = px.pie(pd.DataFrame(macros), values='Percentage', names='Macronutrient', color='Macronutrient', color_discrete_map={'Carbs':'#FF9999', 'Protein':'#66B2FF', 'Fats':'#99FF99'}, title=f"Target Macros for {goal}")
+                fig = px.pie(pd.DataFrame(macros), values='Percentage', names='Macronutrient', color='Macronutrient', color_discrete_map={'Carbs':'#FF9999', 'Protein':'#66B2FF', 'Fats':'#99FF99'})
                 st.plotly_chart(fig, use_container_width=True)
             else:
                 st.error("Data formatting failed. Retry.")
