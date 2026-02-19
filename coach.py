@@ -28,7 +28,7 @@ def get_ai_coach(prompt, temperature=0.7):
             prompt,
             generation_config=genai.types.GenerationConfig(
                 temperature=temperature,
-                max_output_tokens=1024,
+                max_output_tokens=3500,
             )
         )
         return response.text
