@@ -1,8 +1,7 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-from google import genai
-from google.genai import types
+import google.generativeai as genai
 
 # --- PAGE CONFIGURATION ---
 st.set_page_config(
@@ -14,9 +13,9 @@ st.set_page_config(
 
 # --- SECURE API KEY SETUP ---
 try:
-    # Fetches the key securely from .streamlit/secrets.toml or Streamlit Cloud Secrets
+    # Fetches the key securely from .streamlit/secrets.toml locally or Streamlit Cloud Secrets
     API_KEY = st.secrets["GEMINI_API_KEY"]
-    client = genai.Client(api_key=API_KEY)
+    genai.configure(api_key=API_KEY)
 except KeyError:
     st.error("⚠️ API Key missing! Please configure '.streamlit/secrets.toml' or Streamlit Cloud Secrets.")
     st.stop()
@@ -24,10 +23,13 @@ except KeyError:
 # --- HELPER FUNCTION: GEMINI API CALL ---
 def get_ai_coach(prompt, temperature=0.7):
     try:
-        response = client.models.generate_content(
-            model="gemini-1.5-flash",
-            contents=prompt,
-            config=types.GenerateContentConfig(
+        # Initializing the correct model for the updated SDK
+        model = genai.GenerativeModel('gemini-1.5-flash')
+        
+        # Generating response with specific temperature controls
+        response = model.generate_content(
+            prompt,
+            generation_config=genai.types.GenerationConfig(
                 temperature=temperature,
                 max_output_tokens=1024,
             )
@@ -53,7 +55,7 @@ st.divider()
 st.sidebar.header("👤 Athlete Profile")
 sport = st.sidebar.selectbox("Sport", ["Football", "Cricket", "Basketball", "Athletics", "Tennis"])
 position = st.sidebar.text_input("Player Position", placeholder="e.g., Striker, Fast Bowler, Point Guard")
-age = st.sidebar.number_input("Age", min_value=10, max_value=30, value=15)
+age = st.sidebar.number_input("Age", min_value=8, max_value=30, value=15)
 
 st.sidebar.header("🩺 Health & Goals")
 goal = st.sidebar.selectbox("Primary Goal", ["Build Stamina", "Post-Injury Recovery", "Tactical Improvement", "Strength"])
@@ -76,7 +78,7 @@ with tab1:
     
     if st.button("Generate Workout Plan"):
         if not position:
-            st.warning("Please enter your position in the sidebar!")
+            st.warning("Please enter your position in the sidebar to get a personalized plan!")
         else:
             with st.spinner("CoachBot is designing your routine..."):
                 prompt = f"""
@@ -88,7 +90,7 @@ with tab1:
                 workout_plan = get_ai_coach(prompt, temperature=0.5)
                 st.write(workout_plan)
 
-# 2. RECOVERY & SAFETY (Low Temperature - Conservative/Accurate)
+# 2. RECOVERY & SAFETY (Low Temperature)
 with tab2:
     st.markdown("### Injury Adaptation & Safe Training")
     if st.button("Generate Recovery Protocol"):
@@ -106,7 +108,7 @@ with tab2:
                 st.warning("⚠️ Always consult a medical professional before starting post-injury training.")
                 st.write(recovery_plan)
 
-# 3. TACTICS & MINDSET (High Temperature - Creative/Varied)
+# 3. TACTICS & MINDSET (High Temperature)
 with tab3:
     st.markdown("### Tactical Advice & Mental Focus")
     skill = st.text_input("Specific skill you want to improve", placeholder="e.g., decision-making under pressure, bowling yorkers")
@@ -115,7 +117,7 @@ with tab3:
         with st.spinner("Drawing up the playbook..."):
             prompt = f"""
             Act as an elite {sport} coach. Provide creative, highly specific tactical coaching tips 
-            to improve {skill} for a {position}. Include a pre-match visualization technique.
+            to improve '{skill}' for a {position}. Include a pre-match visualization technique.
             """
             # Temperature 0.8 for creative tactical solutions and varied mental routines
             tactics = get_ai_coach(prompt, temperature=0.8)
@@ -142,6 +144,8 @@ with tab4:
                 macros = {"Macronutrient": ["Carbohydrates", "Protein", "Fats"], "Percentage": [55, 25, 20]}
             elif goal == "Strength":
                 macros = {"Macronutrient": ["Carbohydrates", "Protein", "Fats"], "Percentage": [40, 40, 20]}
+            elif goal == "Post-Injury Recovery":
+                macros = {"Macronutrient": ["Carbohydrates", "Protein", "Fats"], "Percentage": [45, 35, 20]}
             else:
                 macros = {"Macronutrient": ["Carbohydrates", "Protein", "Fats"], "Percentage": [45, 30, 25]}
                 
